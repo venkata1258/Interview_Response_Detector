@@ -1,8 +1,6 @@
-streamlit
-scikit-learn
-pandas
-numpy
-nltk
-tensorflow
-keras
-joblib
+streamlit==1.52.2
+tensorflow==2.20.0
+torch==2.9.1
+numpy==2.1.3
+scikit-learn==1.7.2
+pandas==2.3.3
