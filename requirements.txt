@@ -1,6 +1,8 @@
 streamlit
 numpy
-tensorflow-cpu
+tensorflow
 keras
+pydub
 SpeechRecognition
 streamlit-mic-recorder
+pickle-mixin
