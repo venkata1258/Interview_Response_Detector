@@ -1,0 +1,6 @@
+streamlit
+numpy
+tensorflow-cpu
+keras
+SpeechRecognition
+streamlit-mic-recorder
