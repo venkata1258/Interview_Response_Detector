@@ -1,8 +1,0 @@
-streamlit
-numpy
-tensorflow
-keras
-SpeechRecognition
-streamlit-mic-recorder
-pydub
-pickle-mixin
