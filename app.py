@@ -11,7 +11,7 @@ from pydub import AudioSegment
 # ========================
 # Page Config
 # ========================
-st.set_page_config(page_title="Interview Response Detector", page_icon="🎯")
+st.set_page_config(page_title="Interview Response Analyzer", page_icon="🎯")
 
 st.title("🎯 Interview Response Analyzer")
 st.write("Speak or type your interview answer to analyze it.")
@@ -68,15 +68,26 @@ def speech_to_text(audio_bytes):
 
     try:
 
-        audio = AudioSegment.from_file(webm_path, format="webm")
+        # Convert WEBM → WAV
+        audio = AudioSegment.from_file(webm_path)
         audio.export(wav_path, format="wav")
 
         with sr.AudioFile(wav_path) as source:
+
+            recognizer.adjust_for_ambient_noise(source)
             audio_data = recognizer.record(source)
 
         text = recognizer.recognize_google(audio_data)
 
         return text
+
+    except sr.UnknownValueError:
+        st.warning("Speech not clear. Please speak again.")
+        return None
+
+    except sr.RequestError:
+        st.error("Speech recognition service unavailable.")
+        return None
 
     except Exception as e:
         st.error(f"Audio processing error: {e}")
@@ -88,6 +99,7 @@ def speech_to_text(audio_bytes):
 # ========================
 if "speech_text" not in st.session_state:
     st.session_state.speech_text = ""
+
 
 # ========================
 # Input UI
@@ -103,7 +115,7 @@ with col1:
     )
 
 with col2:
-    audio = mic_recorder(start_prompt="🎤", stop_prompt="⏹", just_once=True)
+    audio = mic_recorder(start_prompt="🎤 Start", stop_prompt="⏹ Stop", just_once=False)
 
 
 # ========================
