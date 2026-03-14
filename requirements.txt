@@ -5,4 +5,5 @@ SpeechRecognition
 streamlit-mic-recorder
 tensorflow
 keras
+scikit-learn
 ffmpeg-python
