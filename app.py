@@ -8,10 +8,21 @@ from keras.preprocessing.sequence import pad_sequences
 from streamlit_mic_recorder import mic_recorder
 from pydub import AudioSegment
 
-# ===== Page Config =====
-st.set_page_config(page_title="Interview Response Detector", page_icon="🎯", layout="wide")
+# ==============================
+# Page Configuration
+# ==============================
+st.set_page_config(
+    page_title="Interview Response Detector",
+    page_icon="🎯",
+    layout="wide"
+)
 
-# ===== Load Model and Tokenizer =====
+st.title("🎯 AI Interview Response Analyzer")
+st.write("Speak or type your interview answer and analyze its quality.")
+
+# ==============================
+# Load Model + Preprocessor
+# ==============================
 @st.cache_resource
 def load_artifacts():
     try:
@@ -26,15 +37,16 @@ def load_artifacts():
         return model, tokenizer, max_len
 
     except Exception as e:
-        st.error("Error loading model or preprocessing files.")
+        st.error("⚠ Model loading failed")
         st.write(e)
         return None, None, None
 
 
 model, tokenizer, max_len = load_artifacts()
 
-
-# ===== Prediction Function =====
+# ==============================
+# Prediction Function
+# ==============================
 def predict_answer(text):
 
     seq = tokenizer.texts_to_sequences([text])
@@ -50,14 +62,16 @@ def predict_answer(text):
     return labels[pred_index], confidence
 
 
-# ===== Speech to Text =====
+# ==============================
+# Speech → Text
+# ==============================
 def speech_to_text(audio_bytes):
 
     recognizer = sr.Recognizer()
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as temp_webm:
-        temp_webm.write(audio_bytes)
-        webm_path = temp_webm.name
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as temp_audio:
+        temp_audio.write(audio_bytes)
+        webm_path = temp_audio.name
 
     wav_path = webm_path.replace(".webm", ".wav")
 
@@ -69,60 +83,70 @@ def speech_to_text(audio_bytes):
             audio_data = recognizer.record(source)
 
         text = recognizer.recognize_google(audio_data)
+
         return text
 
-    except:
+    except sr.UnknownValueError:
+        st.warning("⚠ Speech not clear. Try again.")
+        return None
+
+    except sr.RequestError:
+        st.error("Speech recognition service unavailable.")
+        return None
+
+    except Exception as e:
+        st.error(f"Audio processing error: {e}")
         return None
 
 
-# ===== Session State =====
+# ==============================
+# Session State
+# ==============================
 if "speech_text" not in st.session_state:
     st.session_state.speech_text = ""
 
-
-# ===== UI =====
-st.title("🎯 Interview Response Detector")
-st.write("Type or speak your interview answer.")
-
-st.divider()
-
-# ===== Input Layout =====
+# ==============================
+# Input UI
+# ==============================
 col1, col2 = st.columns([8,1])
 
 with col1:
     user_input = st.text_input(
-        "Your Answer",
+        "Type your answer",
         value=st.session_state.speech_text,
-        label_visibility="collapsed"
+        label_visibility="collapsed",
+        placeholder="Type your interview answer here..."
     )
 
 with col2:
     audio = mic_recorder(start_prompt="🎤", stop_prompt="⏹", just_once=True)
 
-
-# ===== Handle Voice =====
+# ==============================
+# Handle Voice
+# ==============================
 if audio:
+
+    st.info("Processing voice...")
 
     detected_text = speech_to_text(audio["bytes"])
 
     if detected_text:
         st.session_state.speech_text = detected_text
-        st.success("Voice detected")
-        st.write("Speech Text:", detected_text)
-    else:
-        st.error("Speech could not be recognized")
+        st.success("Voice recognized successfully!")
+        st.write("**Speech Text:**", detected_text)
 
-
-# ===== Prediction =====
+# ==============================
+# Analyze Button
+# ==============================
 if st.button("🔍 Analyze Answer"):
 
     final_text = user_input.strip()
 
     if final_text == "":
-        st.warning("⚠ Please type or record an answer")
+        st.warning("⚠ Please type or record an answer.")
 
     elif model is None:
-        st.error("Model is not loaded. Please check deployment files.")
+        st.error("Model not loaded.")
 
     else:
 
@@ -139,11 +163,12 @@ if st.button("🔍 Analyze Answer"):
 
         st.progress(confidence)
 
+        # Feedback
         if label == "Short Answer":
-            st.info("💡 Try giving a more detailed response.")
+            st.info("💡 Try explaining your answer with more details.")
 
         elif label == "Medium Answer":
-            st.success("👍 Good balance of clarity and detail.")
+            st.success("👍 Good answer length and clarity.")
 
         else:
-            st.success("🔥 Excellent answer!")
+            st.success("🔥 Excellent detailed response!")
