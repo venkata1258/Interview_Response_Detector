@@ -1,0 +1,8 @@
+streamlit
+numpy
+pydub
+SpeechRecognition
+streamlit-mic-recorder
+tensorflow
+keras
+ffmpeg-python
