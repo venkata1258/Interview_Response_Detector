@@ -1,9 +1,8 @@
 streamlit
 numpy
-pydub
 SpeechRecognition
 streamlit-mic-recorder
+pydub
 tensorflow
 keras
 scikit-learn
-ffmpeg-python
