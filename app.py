@@ -2,11 +2,8 @@ import streamlit as st
 import numpy as np
 import pickle
 import speech_recognition as sr
-import tempfile
 from keras.models import load_model
 from keras.preprocessing.sequence import pad_sequences
-from streamlit_mic_recorder import mic_recorder
-from pydub import AudioSegment
 
 # ========================
 # Page Config
@@ -14,153 +11,105 @@ from pydub import AudioSegment
 st.set_page_config(page_title="Interview Response Analyzer", page_icon="🎯")
 
 st.title("🎯 Interview Response Analyzer")
-st.write("Speak or type your interview answer to analyze it.")
+st.write("Record your voice or type your answer to analyze the response quality.")
 
 # ========================
-# Load Model
+# Load Model & Tokenizer
 # ========================
 @st.cache_resource
 def load_artifacts():
-
+    # Ensure these files are in your project folder
     model = load_model("emotion_model.keras")
-
     with open("preprocessor.pkl", "rb") as f:
         data = pickle.load(f)
+    return model, data["tokenizer"], data["max_len"]
 
-    tokenizer = data["tokenizer"]
-    max_len = data["max_len"]
-
-    return model, tokenizer, max_len
-
-
-model, tokenizer, max_len = load_artifacts()
+try:
+    model, tokenizer, max_len = load_artifacts()
+except Exception as e:
+    st.error(f"Error loading models: {e}")
+    st.stop()
 
 # ========================
-# Prediction
+# Logic: Prediction
 # ========================
 def predict_answer(text):
-
     seq = tokenizer.texts_to_sequences([text])
     padded = pad_sequences(seq, maxlen=max_len)
-
     prediction = model.predict(padded)
-
+    
     index = np.argmax(prediction)
     confidence = float(np.max(prediction))
-
     labels = ["Short Answer", "Medium Answer", "Long Answer"]
-
+    
     return labels[index], confidence
 
-
 # ========================
-# Speech → Text
+# Logic: Speech Processing
 # ========================
-def speech_to_text(audio_bytes):
-
+def process_audio(audio_file):
     recognizer = sr.Recognizer()
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as temp_audio:
-        temp_audio.write(audio_bytes)
-        webm_path = temp_audio.name
-
-    wav_path = webm_path.replace(".webm", ".wav")
-
     try:
-
-        # Convert WEBM → WAV
-        audio = AudioSegment.from_file(webm_path)
-        audio.export(wav_path, format="wav")
-
-        with sr.AudioFile(wav_path) as source:
-
-            recognizer.adjust_for_ambient_noise(source)
+        with sr.AudioFile(audio_file) as source:
             audio_data = recognizer.record(source)
-
-        text = recognizer.recognize_google(audio_data)
-
-        return text
-
+            # Using Google's free web API
+            text = recognizer.recognize_google(audio_data)
+            return text
     except sr.UnknownValueError:
-        st.warning("Speech not clear. Please speak again.")
-        return None
-
+        return "Error: Could not understand audio."
     except sr.RequestError:
-        st.error("Speech recognition service unavailable.")
-        return None
-
+        return "Error: Speech service is down."
     except Exception as e:
-        st.error(f"Audio processing error: {e}")
-        return None
-
+        return f"Error: {e}"
 
 # ========================
-# Session State
+# User Interface
 # ========================
-if "speech_text" not in st.session_state:
-    st.session_state.speech_text = ""
 
+# 1. Audio Input (The FFmpeg-free way)
+st.subheader("Step 1: Record or Type")
+recorded_audio = st.audio_input("Record your interview answer")
 
-# ========================
-# Input UI
-# ========================
-col1, col2 = st.columns([8,1])
+# Initialize session state for the text
+if "final_text" not in st.session_state:
+    st.session_state.final_text = ""
 
-with col1:
-    user_input = st.text_input(
-        "Your Answer",
-        value=st.session_state.speech_text,
-        label_visibility="collapsed",
-        placeholder="Type your interview answer..."
-    )
+# If audio is recorded, process it immediately
+if recorded_audio:
+    with st.spinner("Transcribing..."):
+        transcript = process_audio(recorded_audio)
+        if "Error" not in transcript:
+            st.session_state.final_text = transcript
+            st.success("Transcription complete!")
+        else:
+            st.error(transcript)
 
-with col2:
-    audio = mic_recorder(start_prompt="🎤 Start", stop_prompt="⏹ Stop", just_once=False)
+# 2. Text Input (Allows manual editing of transcription)
+user_text = st.text_area(
+    "Edit or type your response here:", 
+    value=st.session_state.final_text,
+    height=150
+)
 
-
-# ========================
-# Handle Voice
-# ========================
-if audio:
-
-    detected_text = speech_to_text(audio["bytes"])
-
-    if detected_text:
-        st.session_state.speech_text = detected_text
-        st.success("Voice recognized!")
-        st.write("Speech Text:", detected_text)
-    else:
-        st.warning("Speech could not be recognized.")
-
-
-# ========================
-# Analyze
-# ========================
+# 3. Analyze Button
 if st.button("🔍 Analyze Answer"):
-
-    final_text = user_input.strip()
-
-    if final_text == "":
-        st.warning("Please type or record an answer.")
-
+    if not user_text.strip():
+        st.warning("Please provide an answer first.")
     else:
+        label, confidence = predict_answer(user_text)
 
-        label, confidence = predict_answer(final_text)
-
-        st.subheader("Prediction Result")
-
-        col1, col2 = st.columns(2)
-
-        col1.metric("Answer Type", label)
-        col2.metric("Confidence", f"{confidence*100:.2f}%")
-
+        st.divider()
+        st.subheader("Analysis Results")
+        
+        c1, c2 = st.columns(2)
+        c1.metric("Evaluation", label)
+        c2.metric("Model Confidence", f"{confidence*100:.1f}%")
+        
         st.progress(confidence)
 
         if label == "Short Answer":
-            st.info("Try giving a more detailed response.")
-
+            st.info("💡 Tip: Try to elaborate more using the STAR method (Situation, Task, Action, Result).")
         elif label == "Medium Answer":
-            st.success("Good balance of clarity and detail.")
-
+            st.success("✅ Good balance! Your response is concise yet informative.")
         else:
-            st.success("Excellent answer!")
+            st.success("🌟 Excellent! You've provided a comprehensive and detailed answer.")
